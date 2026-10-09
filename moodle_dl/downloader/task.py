@@ -101,9 +101,16 @@ class Task:
             ('assign', 'book', 'data', 'folder', 'forum', 'lesson', 'page', 'quiz', 'workshop')
         ):
             return PT.path_of_file_in_module(
-                storage_path, course_name, file.section_name, file.module_name, file.content_filepath
+                storage_path,
+                course_name,
+                file.section_name,
+                file.module_name,
+                file.content_filepath,
+                file.section_parent_name,
             )
-        return PT.path_of_file(storage_path, course_name, file.section_name, file.content_filepath)
+        return PT.path_of_file(
+            storage_path, course_name, file.section_name, file.content_filepath, file.section_parent_name
+        )
 
     def add_token_to_url(self, url: str) -> str:
         """

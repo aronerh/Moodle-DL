@@ -597,8 +597,29 @@ class PathTools:
         return os.path.join(*sanitized_path)
 
     @staticmethod
+    def path_of_section(
+        storage_path: str, course_fullname: str, section_name: str, section_parent_name: str = None
+    ) -> Path:
+        """
+        @param storage_path: The path where all files should be stored.
+        @param course_fullname: The name of the course where the section is located.
+        @param section_name: The name of the section.
+        @param section_parent_name: The name of the parent section if the section is a subsection.
+        @return: The path of the section directory. Subsections are nested in their parent section.
+        """
+        path = Path(storage_path) / PathTools.to_valid_name(course_fullname, is_file=False)
+        if section_parent_name is not None:
+            path = path / PathTools.to_valid_name(section_parent_name, is_file=False)
+        return path / PathTools.to_valid_name(section_name, is_file=False)
+
+    @staticmethod
     def path_of_file_in_module(
-        storage_path: str, course_fullname: str, file_section_name: str, file_module_name: str, file_path: str
+        storage_path: str,
+        course_fullname: str,
+        file_section_name: str,
+        file_module_name: str,
+        file_path: str,
+        file_section_parent_name: str = None,
     ):
         """
         @param storage_path: The path where all files should be stored.
@@ -609,19 +630,24 @@ class PathTools:
         @param file_module_name: The name of the module where the file
                                  is located.
         @param file_path: The additional path of a file (subdirectory).
+        @param file_section_parent_name: The name of the parent section if the file is located in a subsection.
         @return: A path where the file should be saved.
         """
         path = str(
-            Path(storage_path)
-            / PathTools.to_valid_name(course_fullname, is_file=False)
-            / PathTools.to_valid_name(file_section_name, is_file=False)
+            PathTools.path_of_section(storage_path, course_fullname, file_section_name, file_section_parent_name)
             / PathTools.to_valid_name(file_module_name, is_file=False)
             / PathTools.sanitize_path(file_path).strip('/')
         )
         return path
 
     @staticmethod
-    def path_of_file(storage_path: str, course_fullname: str, file_section_name: str, file_path: str):
+    def path_of_file(
+        storage_path: str,
+        course_fullname: str,
+        file_section_name: str,
+        file_path: str,
+        file_section_parent_name: str = None,
+    ):
         """
         @param storage_path: The path where all files should be stored.
         @param course_fullname: The name of the course where the file is
@@ -629,12 +655,11 @@ class PathTools:
         @param file_section_name: The name of the section where the file
                                   is located.
         @param file_path: The additional path of a file (subdirectory).
+        @param file_section_parent_name: The name of the parent section if the file is located in a subsection.
         @return: A path where the file should be saved.
         """
         path = str(
-            Path(storage_path)
-            / PathTools.to_valid_name(course_fullname, is_file=False)
-            / PathTools.to_valid_name(file_section_name, is_file=False)
+            PathTools.path_of_section(storage_path, course_fullname, file_section_name, file_section_parent_name)
             / PathTools.sanitize_path(file_path).strip('/')
         )
         return path

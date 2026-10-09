@@ -232,6 +232,11 @@ class MoodleService:
                     and (determine_ext(file.content_filename) not in exclude_file_extensions)
                     # Exclude files that are in excluded sections
                     and (MoodleService.should_download_section(file.section_id, course.excluded_sections))
+                    # Excluding a section also excludes its subsections
+                    and (
+                        file.section_parent_id is None
+                        or MoodleService.should_download_section(file.section_parent_id, course.excluded_sections)
+                    )
                     # Exclude files that are bigger than max_file_size
                     and (max_file_size == 0 or file.content_filesize < max_file_size)
                 ):

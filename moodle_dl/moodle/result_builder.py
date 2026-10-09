@@ -1,5 +1,6 @@
 import hashlib
 import html
+import json
 import logging
 import mimetypes
 import re
@@ -28,11 +29,22 @@ class ResultBuilder:
         @return: A list of files of the course.
         """
         files = []
+        parents = self._get_subsection_parents(course_sections)
         for section in course_sections:
             location = {
                 'section_id': section.get('id', 0),
                 'section_name': section.get('name', ''),
             }
+            parent = parents.get(section.get('id'))
+            if parent is not None:
+                location.update(
+                    {
+                        # With filters enabled, Moodle wraps subsection names in <span class="course-mod_subsection">
+                        'section_name': re.sub(r'<[^>]*>', '', location['section_name']).strip(),
+                        'section_parent_id': parent.get('id', 0),
+                        'section_parent_name': parent.get('name', ''),
+                    }
+                )
             section_modules = section.get('modules', [])
             files += self._get_files_in_modules(section_modules, fetched_mods, **location)
 
@@ -50,6 +62,27 @@ class ResultBuilder:
         files += self._get_files_not_on_main_page(fetched_mods)
 
         return files
+
+    @staticmethod
+    def _get_subsection_parents(course_sections: List[Dict]) -> Dict[int, Dict]:
+        """
+        Moodle 4.5+ returns subsections as top-level sections. The parent section contains a module of type
+        'subsection' whose customdata points to the section id of the subsection.
+        @param course_sections: Contains the sections of the course
+        @return: A dictionary that maps the id of each subsection to its parent section
+        """
+        parents = {}
+        for section in course_sections:
+            for module in section.get('modules', []):
+                if module.get('modname', '') != 'subsection':
+                    continue
+                try:
+                    subsection_id = int(json.loads(module.get('customdata', '')).get('sectionid'))
+                except (ValueError, TypeError, AttributeError):
+                    logging.debug('Could not find the section of subsection module %s', module.get('id'))
+                    continue
+                parents[subsection_id] = section
+        return parents
 
     def _get_files_in_modules(self, section_modules: List, fetched_mods: Dict[str, Dict], **location) -> List[File]:
         """

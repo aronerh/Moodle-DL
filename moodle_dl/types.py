@@ -30,6 +30,8 @@ class File:
         file_hash: str = None,
         file_id: int = None,
         old_file_id: int = None,
+        section_parent_name: str = None,
+        section_parent_id: int = None,
     ):
         self.file_id = file_id
 
@@ -37,6 +39,10 @@ class File:
         self.section_name = section_name
         self.section_id = section_id
         self.module_name = module_name
+
+        # Set if the file is in a subsection (Moodle 4.5+); not stored in the database
+        self.section_parent_name = section_parent_name
+        self.section_parent_id = section_parent_id
 
         self.content_filepath = content_filepath
         self.content_filename = content_filename
