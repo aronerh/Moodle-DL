@@ -732,6 +732,8 @@ class Task:
             # Try to move the old file if it still exists
             if self.file.moved:
                 if self.move_old_file():
+                    # Report success so that the move is saved in the database
+                    self.report_success()
                     return True
 
             if self.file.content_type == 'description':
