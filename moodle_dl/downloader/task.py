@@ -51,6 +51,9 @@ class Task:
     "Task is responsible to download or create a file"
 
     CHUNK_SIZE = 102400  # default: 1024 * 100 = 100kb; will be overwritten with download_chunk_size
+    # Set by the DownloadService: renames a file at a path that no current database entry uses
+    release_orphaned_path = None
+    created_paths = set()
     MAX_DL_RETRIES = 3
 
     RQ_HEADER = {
@@ -129,8 +132,17 @@ class Task:
         Rename target_path if necessary to a unused filename and touch the target_path
         @return: Path to the touched target file
         """
+        # A file left behind by a deleted Moodle file should not push the new file to <name>_01.<ext>.
+        # Paths created in this run belong to other tasks and are never released.
+        if (
+            Task.release_orphaned_path is not None
+            and target_path not in Task.created_paths
+            and os.path.isfile(target_path)
+        ):
+            Task.release_orphaned_path(target_path)
         target_path = PT.get_unused_file_path(target_path)
         PT.touch_file(target_path)
+        Task.created_paths.add(target_path)
         return target_path
 
     def rename_old_file(self) -> bool:

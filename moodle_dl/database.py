@@ -1,4 +1,5 @@
 import logging
+import os
 import sqlite3
 from sqlite3 import Error
 from typing import Dict, List
@@ -653,6 +654,42 @@ class StateRecorder:
 
         conn.commit()
         conn.close()
+
+    def release_orphaned_path(self, path: str) -> bool:
+        """
+        If a file exists at path that no current file in the database is saved to (e.g. a file that was deleted
+        in Moodle and then uploaded again), rename it to <name>_old.<ext> so the new file can use the path.
+        The database entries of the old file are updated to the new location.
+        @return: True if the path was released
+        """
+        if not os.path.isfile(path):
+            return False
+
+        def norm(p: str) -> str:
+            return os.path.normcase(os.path.abspath(os.path.join(self.opts.path, p)))
+
+        conn = sqlite3.connect(self.db_file)
+        try:
+            rows = conn.execute('SELECT file_id, saved_to, deleted, modified, moved FROM files').fetchall()
+            target = norm(path)
+            matching = [row for row in rows if norm(row[1]) == target]
+            if any(not (deleted or modified or moved) for _, _, deleted, modified, moved in matching):
+                return False
+
+            destination, filename, file_extension = PT.get_path_parts(path)
+            new_path = PT.get_unused_file_path(PT.make_path(destination, f'{filename}_old.{file_extension}'))
+            os.rename(path, new_path)
+            conn.executemany(
+                'UPDATE files SET saved_to = ? WHERE file_id = ?', [(new_path, row[0]) for row in matching]
+            )
+            conn.commit()
+            logging.info('Renamed orphaned file %s to %s', path, new_path)
+            return True
+        except OSError as e:
+            logging.warning('Could not rename orphaned file %s: %s', path, e)
+            return False
+        finally:
+            conn.close()
 
     def batch_delete_files(self, courses: List[Course]):
         conn = sqlite3.connect(self.db_file)

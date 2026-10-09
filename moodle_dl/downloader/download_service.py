@@ -26,6 +26,8 @@ class DownloadService:
     def gen_all_tasks(self) -> List:
         # Set custom chunk size
         Task.CHUNK_SIZE = self.opts.download_chunk_size
+        Task.release_orphaned_path = self.database.release_orphaned_path
+        Task.created_paths = set()
         dl_options = self.config.get_download_options(self.opts)
         thread_pool = ThreadPoolExecutor(max_workers=self.opts.max_parallel_yt_dlp)
         all_tasks = []
