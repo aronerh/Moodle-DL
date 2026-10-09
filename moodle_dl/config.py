@@ -235,6 +235,10 @@ class ConfigHelper:
         # return if files for which a cookie is required should be downloaded
         return self.get_property_or('download_also_with_cookie', False)
 
+    def get_use_module_name_as_filename(self) -> bool:
+        # return if files of single-file resources should be named after the resource in Moodle
+        return self.get_property_or('use_module_name_as_filename', False)
+
     def get_write_links(self) -> Dict:
         # returns what kind of shortcuts should be created
         write_links = {

@@ -3,6 +3,7 @@ import html
 import json
 import logging
 import mimetypes
+import os
 import re
 import urllib.parse as urlparse
 from typing import Dict, List
@@ -15,11 +16,12 @@ class ResultBuilder:
     Combines all fetched mod files and core course files to one result based on File objects
     """
 
-    def __init__(self, moodle_url: MoodleURL, version: int, mod_plurals: Dict):
+    def __init__(self, moodle_url: MoodleURL, version: int, mod_plurals: Dict, use_module_name_as_filename=False):
         self.version = version
         self.moodle_url = moodle_url
         self.moodle_domain = moodle_url.domain
         self.mod_plurals = mod_plurals
+        self.use_module_name_as_filename = use_module_name_as_filename
 
     def get_files_in_sections(self, course_sections: List[Dict], fetched_mods: Dict[str, Dict]) -> List[File]:
         """
@@ -349,9 +351,20 @@ class ResultBuilder:
             module_modname: str,
         """
         files = []
+        # A resource with a single file can be named after the resource, which is usually more descriptive
+        rename_to_module = (
+            self.use_module_name_as_filename
+            and location['module_modname'] == 'resource'
+            and sum(1 for content in module_contents if content.get('type', '') == 'file') == 1
+        )
         for content in module_contents:
             content_type = content.get('type', '')
             content_filename = content.get('filename', '')
+            if rename_to_module and content_type == 'file' and location['module_name'].strip():
+                extension = os.path.splitext(content_filename)[1]
+                content_filename = html.unescape(location['module_name']).strip()
+                if extension and not content_filename.lower().endswith(extension.lower()):
+                    content_filename += extension
             content_filepath = content.get('filepath', '/') or '/'
             content_fileurl = content.get('fileurl', '')
 

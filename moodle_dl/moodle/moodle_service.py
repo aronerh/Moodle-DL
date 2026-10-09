@@ -128,9 +128,9 @@ class MoodleService:
         fetched_mods_files = await fetch_mods_files(mods, courses, core_contents)
 
         logging.debug('Combine API results...')
-        ResultBuilder(moodle_url, version, get_mod_plurals()).add_files_to_courses(
-            courses, core_contents, fetched_mods_files
-        )
+        ResultBuilder(
+            moodle_url, version, get_mod_plurals(), self.config.get_use_module_name_as_filename()
+        ).add_files_to_courses(courses, core_contents, fetched_mods_files)
 
         logging.debug('Checking for changes...')
         changes = database.changes_of_new_version(courses)
