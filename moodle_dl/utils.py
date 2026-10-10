@@ -785,6 +785,20 @@ class PathTools:
         return new_file_path
 
     @staticmethod
+    def was_edited_locally(file_path: str, moodle_filesize: int, moodle_timemodified: int) -> bool:
+        """
+        Whether a downloaded file was changed on this computer after the download. Downloads get the size and
+        modification time of the Moodle file; saving a document changes at least one of them.
+        """
+        try:
+            stat = os.stat(file_path)
+        except OSError:
+            return False
+        if moodle_filesize and stat.st_size != moodle_filesize:
+            return True
+        return bool(moodle_timemodified) and abs(stat.st_mtime - moodle_timemodified) > 2
+
+    @staticmethod
     def get_path_parts(file_path: str) -> PathParts:
         """
         @return: PathParts - File extension is without a dot!

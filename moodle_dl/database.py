@@ -670,20 +670,28 @@ class StateRecorder:
 
         conn = sqlite3.connect(self.db_file)
         try:
-            rows = conn.execute('SELECT file_id, saved_to, deleted, modified, moved FROM files').fetchall()
+            rows = conn.execute(
+                'SELECT file_id, saved_to, deleted, modified, moved, content_filesize, content_timemodified FROM files'
+            ).fetchall()
             target = norm(path)
             matching = [row for row in rows if norm(row[1]) == target]
-            if any(not (deleted or modified or moved) for _, _, deleted, modified, moved in matching):
+            if any(not (deleted or modified or moved) for _, _, deleted, modified, moved, _, _ in matching):
                 return False
 
+            # Without a database entry the file is not from Moodle at all, so treat it as my own
+            edited = not matching or any(PT.was_edited_locally(path, row[5], row[6]) for row in matching)
             destination, filename, file_extension = PT.get_path_parts(path)
-            new_path = PT.get_unused_file_path(PT.make_path(destination, f'{filename}_old.{file_extension}'))
+            suffix = ' (my edits)' if edited else '_old'
+            new_path = PT.get_unused_file_path(PT.make_path(destination, f'{filename}{suffix}.{file_extension}'))
             os.rename(path, new_path)
             conn.executemany(
                 'UPDATE files SET saved_to = ? WHERE file_id = ?', [(new_path, row[0]) for row in matching]
             )
             conn.commit()
-            logging.info('Renamed orphaned file %s to %s', path, new_path)
+            if edited:
+                logging.warning('Moodle has a new version of %s; your edited copy was kept as %s', path, new_path)
+            else:
+                logging.info('Renamed orphaned file %s to %s', path, new_path)
             return True
         except OSError as e:
             logging.warning('Could not rename orphaned file %s: %s', path, e)

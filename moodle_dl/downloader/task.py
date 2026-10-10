@@ -159,8 +159,11 @@ class Task:
 
         logging.debug('[%d] Renaming old file', self.task_id)
 
+        edited = PT.was_edited_locally(
+            old_path, self.file.old_file.content_filesize, self.file.old_file.content_timemodified
+        )
         destination, filename, file_extension = PT.get_path_parts(old_path)
-        new_filename = f'{filename}_old.{file_extension}'
+        new_filename = f'{filename} (my edits).{file_extension}' if edited else f'{filename}_old.{file_extension}'
         new_path = PT.get_unused_file_path(PT.make_path(destination, new_filename))
 
         try:
@@ -170,6 +173,8 @@ class Task:
             logging.warning('[%d] Failed to renaming old file %r to %r', self.task_id, old_path, new_path)
             return False
 
+        if edited:
+            logging.warning('Moodle has a new version of %s; your edited copy was kept as %s', old_path, new_path)
         return True
 
     class YtLogger:
