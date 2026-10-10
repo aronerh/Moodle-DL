@@ -659,8 +659,9 @@ class StateRecorder:
         """
         If a file exists at path that no current file in the database is saved to (e.g. a file that was deleted
         in Moodle and then uploaded again), rename it to <name>_old.<ext> so the new file can use the path.
-        The database entries of the old file are updated to the new location.
-        @return: True if the path was released
+        The database entries of the old file are updated to the new location. A file I edited (or one that is
+        not from Moodle at all) is left alone and 'kept' is returned, so the new file is not downloaded.
+        @return: True if the path was released, 'kept' if the file there must be kept
         """
         if not os.path.isfile(path):
             return False
@@ -679,19 +680,16 @@ class StateRecorder:
                 return False
 
             # Without a database entry the file is not from Moodle at all, so treat it as my own
-            edited = not matching or any(PT.was_edited_locally(path, row[5], row[6]) for row in matching)
+            if not matching or any(PT.was_edited_locally(path, row[5], row[6]) for row in matching):
+                return 'kept'
             destination, filename, file_extension = PT.get_path_parts(path)
-            suffix = ' (my edits)' if edited else '_old'
-            new_path = PT.get_unused_file_path(PT.make_path(destination, f'{filename}{suffix}.{file_extension}'))
+            new_path = PT.get_unused_file_path(PT.make_path(destination, f'{filename}_old.{file_extension}'))
             os.rename(path, new_path)
             conn.executemany(
                 'UPDATE files SET saved_to = ? WHERE file_id = ?', [(new_path, row[0]) for row in matching]
             )
             conn.commit()
-            if edited:
-                logging.warning('Moodle has a new version of %s; your edited copy was kept as %s', path, new_path)
-            else:
-                logging.info('Renamed orphaned file %s to %s', path, new_path)
+            logging.info('Renamed orphaned file %s to %s', path, new_path)
             return True
         except OSError as e:
             logging.warning('Could not rename orphaned file %s: %s', path, e)

@@ -47,6 +47,14 @@ from moodle_dl.utils import (
 from moodle_dl.utils import PathTools as PT
 
 
+class KeepLocalFile(Exception):
+    """The target path holds a file I edited, which must not be replaced."""
+
+    def __init__(self, path: str):
+        super().__init__(path)
+        self.path = path
+
+
 class Task:
     "Task is responsible to download or create a file"
 
@@ -84,6 +92,7 @@ class Task:
         self.destination = self.gen_path(options.download_path, course, file)
         self.filename = PT.to_valid_name(self.file.content_filename, is_file=True)
         self.status = TaskStatus()
+        self.kept_local_file = False
 
     @staticmethod
     def gen_path(storage_path: str, course: Course, file: File):
@@ -139,7 +148,8 @@ class Task:
             and target_path not in Task.created_paths
             and os.path.isfile(target_path)
         ):
-            Task.release_orphaned_path(target_path)
+            if Task.release_orphaned_path(target_path) == 'kept':
+                raise KeepLocalFile(target_path)
         target_path = PT.get_unused_file_path(target_path)
         PT.touch_file(target_path)
         Task.created_paths.add(target_path)
@@ -159,11 +169,8 @@ class Task:
 
         logging.debug('[%d] Renaming old file', self.task_id)
 
-        edited = PT.was_edited_locally(
-            old_path, self.file.old_file.content_filesize, self.file.old_file.content_timemodified
-        )
         destination, filename, file_extension = PT.get_path_parts(old_path)
-        new_filename = f'{filename} (my edits).{file_extension}' if edited else f'{filename}_old.{file_extension}'
+        new_filename = f'{filename}_old.{file_extension}'
         new_path = PT.get_unused_file_path(PT.make_path(destination, new_filename))
 
         try:
@@ -173,9 +180,28 @@ class Task:
             logging.warning('[%d] Failed to renaming old file %r to %r', self.task_id, old_path, new_path)
             return False
 
-        if edited:
-            logging.warning('Moodle has a new version of %s; your edited copy was kept as %s', old_path, new_path)
         return True
+
+    def keep_edited_old_file(self) -> bool:
+        """
+        If the local copy of a file that changed in Moodle was edited on this computer (e.g. a filled-in
+        template), keep it as it is and do not download the new version. The new version is still saved in
+        the database, so it is not reported again on the next run.
+        @return: True if the local copy was kept
+        """
+        old = self.file.old_file
+        if old is None or not os.path.isfile(old.saved_to):
+            return False
+        if not PT.was_edited_locally(old.saved_to, old.content_filesize, old.content_timemodified):
+            return False
+        self.keep_local_file(old.saved_to)
+        return True
+
+    def keep_local_file(self, path: str):
+        logging.warning('Moodle has a new version of %s; kept your edited file and did not download it', path)
+        self.file.saved_to = path
+        self.kept_local_file = True
+        self.report_success()
 
     class YtLogger:
         "logger for yt-dlp"
@@ -729,7 +755,7 @@ class Task:
 
         success = await self.real_run()
 
-        if success:
+        if success and not self.kept_local_file:
             self.set_utime()
             self.file.time_stamp = int(time.time())
 
@@ -740,10 +766,16 @@ class Task:
 
             # If file was modified try rename the old file, before create new one
             if self.file.modified:
+                if self.keep_edited_old_file():
+                    return True
                 self.rename_old_file()
 
             # Create an empty destination file
-            self.set_path()
+            try:
+                self.set_path()
+            except KeepLocalFile as kept:
+                self.keep_local_file(kept.path)
+                return True
             logging.debug('[%d] Starting downloading of: %s', self.task_id, self.file.saved_to)
 
             # Try to move the old file if it still exists
